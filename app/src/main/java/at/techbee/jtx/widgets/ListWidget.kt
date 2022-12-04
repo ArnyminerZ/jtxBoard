@@ -24,6 +24,7 @@ import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.layout.*
 import androidx.glance.text.*
 import at.techbee.jtx.MainActivity2
@@ -83,7 +84,7 @@ class ListWidget : GlanceAppWidget() {
         }
         if ((listWidgetConfig?.groupBy == GroupBy.STATUS || listWidgetConfig?.groupBy == GroupBy.CLASSIFICATION) && listWidgetConfig.sortOrder == SortOrder.DESC)
             sortedList = sortedList.asReversed()
-        
+
         val groupedList = sortedList.groupBy {
             when (listWidgetConfig?.groupBy) {
                 GroupBy.STATUS -> {
@@ -116,6 +117,18 @@ class ListWidget : GlanceAppWidget() {
 
         val subtasksGrouped = subtasks.groupBy { it.vtodoUidOfParent }
         val subnotesGrouped = subnotes.groupBy { it.vjournalUidOfParent }
+
+
+        val finalGroupedList: MutableMap<String, List<ICal4ListWidget>> = mutableMapOf()
+        groupedList.forEach { (key, list) ->
+            val flatList = mutableListOf<ICal4ListWidget>()
+            list.forEach { parent ->
+                flatList.add(parent)
+                subtasksGrouped[parent.uid]?.let { flatList.addAll(it) }
+                subnotesGrouped[parent.uid]?.let { flatList.addAll(it) }
+            }
+            finalGroupedList.put(key, flatList)
+        }
 
 
         val mainIntent = Intent(context, MainActivity2::class.java)
@@ -198,15 +211,16 @@ class ListWidget : GlanceAppWidget() {
                     )
                 }
 
-                if (groupedList.isNotEmpty()) {
+                if (finalGroupedList.isNotEmpty()) {
                     LazyColumn(
                         modifier = GlanceModifier
                             .padding(bottom = 2.dp, start = 2.dp, end = 2.dp, top = 0.dp)
                             .cornerRadius(8.dp)
                     ) {
 
-                        groupedList.forEach { (key, group) ->
-                            if (groupedList.keys.size > 1) {
+                        finalGroupedList.forEach { (key, group) ->
+                            if (finalGroupedList.keys.size > 1) {
+
                                 item {
                                     Text(
                                         text = key,
@@ -220,73 +234,29 @@ class ListWidget : GlanceAppWidget() {
                                 }
                             }
 
-                            group.forEach group@ { entry ->
+                            items(group) { entry ->
                                 if (listWidgetConfig?.isExcludeDone == true && entry.percent == 100)
-                                    return@group
+                                    return@items
 
                                 if (entry.summary.isNullOrEmpty() && entry.description.isNullOrEmpty())
-                                    return@group
+                                    return@items
 
-                                item {
-                                    ListEntry(
-                                        obj = entry,
-                                        entryColor = entryColor,
-                                        textColor = entryTextColor,
-                                        textColorOverdue = entryOverdueTextColor,
-                                        checkboxEnd = listWidgetConfig?.checkboxPositionEnd ?: false,
-                                        showDescription = listWidgetConfig?.showDescription ?: true,
-                                        modifier = GlanceModifier
-                                            .fillMaxWidth()
-                                            .padding(
-                                                bottom = 2.dp,
-                                            )
-                                    )
-                                }
-
-                                if (listWidgetConfig?.flatView == false) {
-                                    subtasksGrouped[entry.uid]?.forEach { subtask ->
-                                        item {
-                                            ListEntry(
-                                                obj = subtask,
-                                                entryColor = entryColor,
-                                                textColor = entryTextColor,
-                                                textColorOverdue = entryOverdueTextColor,
-                                                checkboxEnd = listWidgetConfig.checkboxPositionEnd,
-                                                showDescription = listWidgetConfig.showDescription,
-                                                modifier = GlanceModifier
-                                                    .fillMaxWidth()
-                                                    .padding(
-                                                        bottom = 2.dp,
-                                                        start = 16.dp
-                                                    )
-                                            )
-                                        }
-                                    }
-                                }
-
-                                if (listWidgetConfig?.flatView == false) {
-                                    subnotesGrouped[entry.uid]?.forEach { subnote ->
-                                        item {
-                                            ListEntry(
-                                                obj = subnote,
-                                                entryColor = entryColor,
-                                                textColor = entryTextColor,
-                                                textColorOverdue = entryOverdueTextColor,
-                                                checkboxEnd = listWidgetConfig.checkboxPositionEnd,
-                                                showDescription = listWidgetConfig.showDescription,
-                                                modifier = GlanceModifier
-                                                    .fillMaxWidth()
-                                                    .padding(
-                                                        bottom = 2.dp,
-                                                        start = 16.dp
-                                                    )
-                                            )
-                                        }
-                                    }
-                                }
+                                ListEntry(
+                                    obj = entry,
+                                    entryColor = entryColor,
+                                    textColor = entryTextColor,
+                                    textColorOverdue = entryOverdueTextColor,
+                                    checkboxEnd = listWidgetConfig?.checkboxPositionEnd ?: false,
+                                    showDescription = listWidgetConfig?.showDescription ?: true,
+                                    modifier = GlanceModifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            start = if ((entry.isChildOfTodo || entry.isChildOfNote || entry.isChildOfJournal) && listWidgetConfig?.flatView == false) 16.dp else 0.dp,
+                                            bottom = 2.dp,
+                                        )
+                                )
                             }
                         }
-
 
                         if (listExceedLimits)
                             item {
